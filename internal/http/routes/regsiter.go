@@ -11,11 +11,14 @@ import (
 )
 
 func Register(r *chi.Mux, cfg config.Config, rdb *redis.Client, db *sql.DB) {
-	repo := ads.NewMySQLRepo(db)
+	// repo/caches originais seguem intocados (usados por outras rotas internas)
+	_ = ads.NewMySQLRepo  // garante link do pacote ads, se usar em outros pontos
 
-	ad := adsDeps{Cfg: cfg, Repo: repo}
-	r.Get("/", ad.AdsRoot)
+	// Raiz "/" no formato do Node
+	node := adsNodeDeps{DB: db}
+	r.Get("/", node.AdsRoot)
 
+	// Shortlink
 	sd := shortDeps{Cfg: cfg, Rdb: rdb, DB: db}
 	r.Get("/{short}", sd.Short)
 }

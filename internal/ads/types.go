@@ -1,19 +1,12 @@
 package ads
 
-// Estrutura no formato esperado pelo JS do Node
-type TypeVariant struct {
+// Mantém o tipo Ad usado internamente pelo pacote ads (cache/service).
+// NÃO redefina Repository aqui (ele já existe em repo.go).
+type Ad struct {
+	ID        string `json:"id"`
+	Type      int    `json:"type"`
+	TargetURL string `json:"target_url"`
 	File      string `json:"file"`
-	Extension string `json:"extension"`
-}
-
-type Item struct {
-	Code        string                 `json:"code"`
-	Description string                 `json:"description,omitempty"`
-	Breackpoint int                    `json:"breackpoint"`
-	Types       map[int]TypeVariant    `json:"types"` // ex.: {"3":{"file":"...","extension":"png"}}
-}
-
-// Repositório agora retorna os itens já no formato "Item"
-type Repository interface {
-	ActiveItems(ctx context.Context, tenantID int, pageTypes []int) ([]Item, error)
+	FileExt   string `json:"file_ext"`
+	Active    bool   `json:"active"`
 }
