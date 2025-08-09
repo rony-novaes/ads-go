@@ -47,7 +47,7 @@ func Register(mux *chi.Mux, cfg config.Config, rdb *redis.Client, db *sql.DB) {
 	// })
 
 	mux.Get("/", ad.AdsHandler)
-	mux.Get("/cache-ads-clear-rdo-sm", ad.CacheClear) // compatível mesmo sem Redis
+	// mux.Get("/cache-ads-clear-rdo-sm", ad.CacheClear) // compatível mesmo sem Redis
 
 	// REMOVIDO: rota /c de clique (não é necessária)
 	// mux.Get("/c", c.Click)

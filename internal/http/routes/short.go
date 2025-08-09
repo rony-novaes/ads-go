@@ -94,9 +94,9 @@ func (d shortDeps) Short(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Salva o clique aqui mesmo (como no Node)
+	// Salva o clique aqui mesmo — TYPE = 2
 	if d.DB != nil {
-		if err := salvarClick(d.DB, uuid, t.ID, clientIP(r), r.UserAgent(), r.Referer()); err != nil {
+		if err := salvarClick(d.DB, uuid, t.ID, 2, clientIP(r), r.UserAgent(), r.Referer()); err != nil {
 			log.Printf("short click save error: %v", err)
 		}
 	}
@@ -108,7 +108,6 @@ func (d shortDeps) Short(w http.ResponseWriter, r *http.Request) {
 // --- helpers ---
 
 func fetchShortFromMySQL(ctx context.Context, db *sql.DB, tenantID int, short string) (url string, uuid string, id int, ok bool, err error) {
-	// Ajuste a tabela/colunas conforme seu schema
 	const q = `
 		SELECT redirect, uuid, id
 		FROM ads
@@ -140,12 +139,12 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func salvarClick(db *sql.DB, uuid string, tenantID int, ip, ua, ref string) error {
-	// Ajuste a tabela/colunas para seu esquema real
+func salvarClick(db *sql.DB, uuid string, tenantID int, typ int, ip, ua, ref string) error {
+	// Ajuste as colunas conforme seu schema real (tipo incluído)
 	const q = `
-		INSERT INTO ads_logs (uuid, tenant_id, ip, user_agent, referer, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO ads_logs (uuid, tenant_id, type, ip, user_agent, referer, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := db.Exec(q, uuid, tenantID, ip, ua, ref, time.Now())
+	_, err := db.Exec(q, uuid, tenantID, typ, ip, ua, ref, time.Now())
 	return err
 }

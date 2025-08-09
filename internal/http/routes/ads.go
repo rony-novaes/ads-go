@@ -2,6 +2,7 @@ package routes
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"ads-go/internal/ads"
 	"ads-go/internal/config"
@@ -20,6 +22,7 @@ type adsDeps struct {
 	Recent RecentStore
 	Repo   ads.Repository
 	Cache  *ads.Cache
+	DB     *sql.DB // <— adicionar DB para logar views
 }
 
 var adTypeConfig = map[string]map[int]int{
@@ -78,11 +81,21 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 		recentSet[code] = struct{}{}
 	}
 
-	pool := filterByTypes(all, final)           // filtra por presença de tipos solicitados
-	pool = avoidRecent(pool, recentSet)         // evita recentemente exibidos (por code)
+	pool := filterByTypes(all, final)                 // filtra por presença de tipos solicitados
+	pool = avoidRecent(pool, recentSet)               // evita recentemente exibidos (por code)
 	sel := ads.FilterByRules(ads.Shuffle(pool), final) // aplica cotas por tipo
 
 	log.Printf("[ads handler] tenant=%d type=%s pool=%d recent=%d selected=%d", t.ID, ptype, len(pool), len(recent), len(sel))
+
+	// Salvar LOG de view (TYPE = 1) para cada anúncio entregue
+	if d.DB != nil && len(sel) > 0 {
+		ip := userIP(r)
+		ua := r.UserAgent()
+		ref := r.Referer()
+		for _, a := range sel {
+			_ = salvarView(d.DB, a.Code, t.ID, 1, ip, ua, ref)
+		}
+	}
 
 	if len(sel) > 0 {
 		// guarda os "codes" exibidos para o usuário
@@ -100,14 +113,8 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (d adsDeps) CacheClear(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"success":true}`))
-}
+// ---- helpers (com ResponseAd) ----
 
-// ---- helpers (agora com ResponseAd) ----
-
-// mantém anúncios que tenham pelo menos 1 tipo presente nas regras
 func filterByTypes(list []ads.ResponseAd, rules map[int]int) []ads.ResponseAd {
 	if len(rules) == 0 {
 		return list
@@ -135,7 +142,6 @@ func filterByTypes(list []ads.ResponseAd, rules map[int]int) []ads.ResponseAd {
 	return out
 }
 
-// evita repetir anúncios recentes, comparando por Code
 func avoidRecent(in []ads.ResponseAd, recent map[string]struct{}) []ads.ResponseAd {
 	if len(recent) == 0 {
 		return in
@@ -146,7 +152,6 @@ func avoidRecent(in []ads.ResponseAd, recent map[string]struct{}) []ads.Response
 			keep = append(keep, a)
 		}
 	}
-	// se filtrou tudo, devolve original para não zerar a página
 	if len(keep) == 0 {
 		return in
 	}
@@ -168,4 +173,17 @@ func userKey(r *http.Request) string {
 	ua := strings.TrimSpace(r.UserAgent())
 	sum := sha256.Sum256([]byte(ip + "|" + ua))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// ---- persistência de logs ----
+
+// salvarView: insere uma linha no ads_logs com TYPE = 1 (view de JSON).
+// Aqui uso a coluna `code`; se sua tabela não tiver `code`, troque para `uuid` conforme seu schema.
+func salvarView(db *sql.DB, code string, tenantID int, typ int, ip, ua, ref string) error {
+	const q = `
+		INSERT INTO ads_logs (code, tenant_id, type, ip, user_agent, referer, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := db.Exec(q, code, tenantID, typ, ip, ua, ref, time.Now())
+	return err
 }
