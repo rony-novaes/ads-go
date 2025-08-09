@@ -10,13 +10,13 @@ type Tenant struct {
 }
 
 var tenants = map[string]Tenant{
-	"conexaoguarulhos.com.br": {ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://conexaoguarulhos.com.br/ads", Static: "https://static.conexaoguarulhos.com.br"},
-	"www.conexaoguarulhos.com.br": {ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://conexaoguarulhos.com.br/ads", Static: "https://static.conexaoguarulhos.com.br"},
-	"gazetadeosasco.com.br": {ID: 2, Portal: "gazetadeosasco.com.br", AdsURL: "https://gazetadeosasco.com.br/ads", Static: "https://static.gazetadeosasco.com.br"},
-	"www.gazetadeosasco.com.br": {ID: 2, Portal: "gazetadeosasco.com.br", AdsURL: "https://gazetadeosasco.com.br/ads", Static: "https://static.gazetadeosasco.com.br"},
+	"conexaoguarulhos.com.br": {ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://conexao.gru.br", Static: "https://static.conexao.gru.br"},
+	"www.conexaoguarulhos.com.br": {ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://conexao.gru.br", Static: "https://static.conexao.gru.br"},
+	"gazetadeosasco.com.br": {ID: 2, Portal: "gazetadeosasco.com.br", AdsURL: "https://gazeta.osasco.br", Static: "https://static.gazeta.osasco.br"},
+	"www.gazetadeosasco.com.br": {ID: 2, Portal: "gazetadeosasco.com.br", AdsURL: "https://gazeta.osasco.br", Static: "https://static.gazeta.osasco.br"},
 }
 
-var Default = Tenant{ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://conexaoguarulhos.com.br/ads", Static: "https://static.conexaoguarulhos.com.br"}
+var Default = Tenant{ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://conexao.gru.br", Static: "https://static.conexao.gru.br"}
 
 func FromRequestHost(host, forwarded string) Tenant {
 	h := strings.ToLower(strings.TrimSpace(forwarded))
