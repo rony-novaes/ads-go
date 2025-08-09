@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -17,9 +18,10 @@ func NewMySQLRepo(db *sql.DB) Repository { return &mysqlRepo{db: db} }
 // ActiveByTypes busca anúncios ativos do tenant, respeitando janela e status.
 // Suporta "types" no formato objeto por tipo:
 //   { "3": { "file": "389d...b917cd", "extension": "png" }, "1": {...} }
-// (Se vier um array de ints por compat, ignora porque precisamos do file/extension por tipo.)
 func (r *mysqlRepo) ActiveByTypes(ctx context.Context, tenantID int, types []int) ([]Ad, error) {
+	start := time.Now()
 	if len(types) == 0 {
+		log.Printf("[ads repo] tenant=%d types=[] -> vazio (0ms)", tenantID)
 		return []Ad{}, nil
 	}
 	want := make(map[int]struct{}, len(types))
@@ -43,11 +45,15 @@ func (r *mysqlRepo) ActiveByTypes(ctx context.Context, tenantID int, types []int
 	`
 
 	rows, err := r.db.QueryContext(ctx, q, tenantID)
-	if err != nil { return nil, err }
+	if err != nil {
+		log.Printf("[ads repo] tenant=%d query err: %v", tenantID, err)
+		return nil, err
+	}
 	defer rows.Close()
 
 	now := time.Now()
 	out := make([]Ad, 0, 128)
+	var scanned, expanded int
 
 	for rows.Next() {
 		var (
@@ -59,8 +65,10 @@ func (r *mysqlRepo) ActiveByTypes(ctx context.Context, tenantID int, types []int
 			deletedAt      sql.NullTime
 		)
 		if err := rows.Scan(&uuid, &redirect, &typesJSON, &status, &startedAt, &validateAt, &deletedAt); err != nil {
+			log.Printf("[ads repo] tenant=%d scan err: %v", tenantID, err)
 			return nil, err
 		}
+		scanned++
 
 		// safety extra
 		if status != 1 || deletedAt.Valid || (startedAt.Valid && startedAt.Time.After(now)) || (validateAt.Valid && !validateAt.Time.After(now)) {
@@ -70,14 +78,14 @@ func (r *mysqlRepo) ActiveByTypes(ctx context.Context, tenantID int, types []int
 			continue
 		}
 
-		// Esperado: objeto por tipo
+		// objeto por tipo
 		type perType struct {
 			File      string `json:"file"`
 			Extension string `json:"extension"`
 		}
 		var obj map[string]perType
 		if err := json.Unmarshal([]byte(typesJSON.String), &obj); err != nil {
-			// Se vier array antigo, não usamos (faltam file/extension por tipo)
+			// se não for objeto (ex.: array antigo), ignore
 			continue
 		}
 
@@ -86,21 +94,32 @@ func (r *mysqlRepo) ActiveByTypes(ctx context.Context, tenantID int, types []int
 			if err != nil { continue }
 			if _, ok := want[tp]; !ok { continue }
 
-			// File e Extension são obrigatórios para montar a imagem no front
-			file := strings.TrimSpace(v.File)
-			ext  := strings.TrimSpace(v.Extension)
-			// se faltar algo, ainda assim entregamos o resto (front pode tratar)
 			out = append(out, Ad{
 				ID:        uuid,
 				Type:      tp,
 				TargetURL: redirect,
-				File:      file,
-				FileExt:   ext,
+				File:      strings.TrimSpace(v.File),
+				FileExt:   strings.TrimSpace(v.Extension),
 				Active:    true,
 			})
+			expanded++
 		}
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		log.Printf("[ads repo] tenant=%d rows err: %v", tenantID, err)
+		return nil, err
+	}
+
+	dur := time.Since(start).Milliseconds()
+	log.Printf("[ads repo] tenant=%d scanned=%d expanded=%d types=%v dur=%dms", tenantID, scanned, expanded, mapKeys(want), dur)
+	return out, nil
+}
+
+// util para logar os types pedidos
+func mapKeys(m map[int]struct{}) []int {
+	ks := make([]int, 0, len(m))
+	for k := range m { ks = append(ks, k) }
+	return ks
 }
 
 // (opcional) debug

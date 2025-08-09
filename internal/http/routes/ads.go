@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,7 +30,7 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type","application/json")
 	ptype := r.URL.Query().Get("type")
 	rulesBase, ok := adTypeConfig[ptype]
-	if !ok { http.Error(w, `{"error":"tipo inválido"}`, 400); return }
+	if !ok { http.Error(w, `{"error":"type inválido"}`, 400); return }
 	t := tenant.FromRequestHost(r.Host, r.Header.Get("X-Forwarded-Host"))
 
 	final := map[int]int{}
@@ -37,7 +38,24 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 		if lim == -1 { if v, _ := strconv.Atoi(r.URL.Query().Get(fmt.Sprintf("ad_type_%d", tp))); v>0 { final[tp]=v } } else { final[tp]=lim }
 	}
 
+	// pool base (cache)
 	all := d.Cache.Get(t.ID)
+
+	// fallback: se cache vier vazio, busca direto no MySQL e popula cache
+	if len(all) == 0 {
+		types := make([]int, 0, len(final))
+		for tp := range final { types = append(types, tp) }
+		log.Printf("[ads handler] cache vazio tenant=%d -> buscando MySQL types=%v", t.ID, types)
+		list, err := d.Repo.ActiveByTypes(r.Context(), t.ID, types)
+		if err == nil && len(list) > 0 {
+			all = list
+			d.Cache.Set(t.ID, list)
+		} else if err != nil {
+			log.Printf("[ads handler] erro MySQL tenant=%d: %v", t.ID, err)
+		} else {
+			log.Printf("[ads handler] MySQL retornou vazio tenant=%d", t.ID)
+		}
+	}
 
 	uk := userKey(r)
 	recent, _ := d.Recent.Get(r, t.ID, uk, d.Cfg.RecentN)
@@ -46,6 +64,8 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	pool := filterByTypes(all, final)
 	pool = avoidRecent(pool, recentSet)
 	sel := ads.FilterByRules(ads.Shuffle(pool), final)
+
+	log.Printf("[ads handler] tenant=%d type=%s pool=%d recent=%d selected=%d", t.ID, ptype, len(pool), len(recent), len(sel))
 
 	if len(sel) > 0 {
 		ids := make([]string,0,len(sel)); for _, a := range sel { ids = append(ids, a.ID) }
