@@ -6,7 +6,6 @@ import (
 )
 
 // memoryRepo: fonte fake só para desenvolvimento/testes.
-// Gera alguns anúncios por tipo solicitado, com extensões de imagem variadas.
 type memoryRepo struct{}
 
 func NewMemoryRepo() Repository { return &memoryRepo{} }
@@ -20,12 +19,12 @@ func (r *memoryRepo) ActiveByTypes(ctx context.Context, tenantID int, types []in
 			out = append(out, Ad{
 				ID:        fmt.Sprintf("uuid-%d-%d", tp, i+1),
 				Type:      tp,
-				TargetURL: "https://conexaoguarulhos.com.br",
+				TargetURL: "",
+				File:      fmt.Sprintf("file-%d-%d", tp, i+1),
 				FileExt:   ext,
 				Active:    true,
 			})
 		}
 	}
-
 	return out, nil
 }
