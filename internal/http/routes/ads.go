@@ -29,7 +29,7 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type","application/json")
 	ptype := r.URL.Query().Get("type")
 	rulesBase, ok := adTypeConfig[ptype]
-	if !ok { http.Error(w, `{"error":"type inválido"}`, 400); return }
+	if !ok { http.Error(w, `{"error":"tipo inválido"}`, 400); return }
 	t := tenant.FromRequestHost(r.Host, r.Header.Get("X-Forwarded-Host"))
 
 	final := map[int]int{}
