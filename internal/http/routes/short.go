@@ -19,6 +19,53 @@ import (
 	"ads-go/internal/tenant"
 )
 
+func preferIP(r *http.Request) (string, string) {
+	// 1) CF-Connecting-IP vence
+	raw := strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))
+	if raw == "" {
+		// 2) Primeiro da X-Forwarded-For
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if len(parts) > 0 {
+				raw = strings.TrimSpace(parts[0])
+			}
+		}
+	}
+	// 3) Fallback para RemoteAddr
+	if raw == "" {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err == nil && host != "" {
+			raw = host
+		} else {
+			raw = r.RemoteAddr
+		}
+	}
+
+	// ipPreferido: tenta achar um IPv4 em XFF
+	var v4 string
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		for _, p := range strings.Split(xff, ",") {
+			ip := net.ParseIP(strings.TrimSpace(p))
+			if ip != nil && ip.To4() != nil {
+				v4 = ip.String()
+				break
+			}
+		}
+	}
+	// Se não achou v4 no XFF, tenta converter o raw para v4-mapeado
+	if v4 == "" {
+		if ip := net.ParseIP(raw); ip != nil && ip.To4() != nil {
+			v4 = ip.String()
+		}
+	}
+
+	// ipPreferido = v4 se existir; senão o raw (pode ser IPv6)
+	if v4 != "" {
+		return v4, raw
+	}
+	return raw, raw
+}
+
 type shortDeps struct {
 	Cfg config.Config
 	Rdb *redis.Client
@@ -86,23 +133,26 @@ func (d shortDeps) lookupShort(w http.ResponseWriter, r *http.Request) (string, 
 }
 
 func (d shortDeps) Short(w http.ResponseWriter, r *http.Request) {
-	t := tenant.FromRequestHost(r.Host, r.Header.Get("X-Forwarded-Host"))
+    t := tenant.FromRequestHost(r.Host, r.Header.Get("X-Forwarded-Host"))
 
-	redir, uuid, err := d.lookupShort(w, r)
-	if err != nil {
-		http.Redirect(w, r, "https://"+t.Portal+"?short_error=404", http.StatusFound)
-		return
-	}
+    redir, uuid, err := d.lookupShort(w, r)
+    if err != nil {
+        http.Redirect(w, r, "https://"+t.Portal+"?short_error=404", http.StatusFound)
+        return
+    }
 
-	// Salva o clique aqui mesmo — TYPE = 2
-	if d.DB != nil {
-		if err := salvarClick(d.DB, uuid, t.ID, 2, clientIP(r), r.UserAgent(), r.Referer()); err != nil {
-			log.Printf("short click save error: %v", err)
-		}
-	}
+    // pega IP preferido e raw
+    ipPref, ipRaw := preferIP(r)
 
-	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, redir, http.StatusFound)
+    // Salva o clique aqui mesmo — TYPE = 2
+    if d.DB != nil {
+        if err := salvarClick(d.DB, uuid, t.ID, 2, ipPref, ipRaw, r.UserAgent(), r.Referer()); err != nil {
+            log.Printf("short click save error: %v", err)
+        }
+    }
+
+    w.Header().Set("Cache-Control", "no-store")
+    http.Redirect(w, r, redir, http.StatusFound)
 }
 
 // --- helpers ---
@@ -139,12 +189,11 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func salvarClick(db *sql.DB, uuid string, tenantID int, typ int, ip, ua, ref string) error {
-	// Ajuste as colunas conforme seu schema real (tipo incluído)
-	const q = `
-		INSERT INTO ads_logs (uuid, tenant_id, type, ip, user_agent, referer, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`
-	_, err := db.Exec(q, uuid, tenantID, typ, ip, ua, ref, time.Now())
-	return err
+func salvarClick(db *sql.DB, uuid string, tenantID int, typ int, ip, ipRaw, ua, ref string) error {
+    const q = `
+        INSERT INTO ads_logs (uuid, tenant_id, type, ip, ip_raw, user_agent, referer, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    _, err := db.Exec(q, uuid, tenantID, typ, ip, ipRaw, ua, ref, time.Now())
+    return err
 }
