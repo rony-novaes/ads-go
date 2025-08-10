@@ -22,7 +22,7 @@ type adsDeps struct {
 	Recent RecentStore
 	Repo   ads.Repository
 	Cache  *ads.Cache
-	DB     *sql.DB // <— adicionar DB para logar views
+	DB     *sql.DB // usado para gravar logs de view (type=1)
 }
 
 var adTypeConfig = map[string]map[int]int{
@@ -77,20 +77,17 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	uk := userKey(r)
 	recent, _ := d.Recent.Get(r, t.ID, uk, d.Cfg.RecentN)
 	recentSet := make(map[string]struct{}, len(recent))
-	for _, code := range recent {
-		recentSet[code] = struct{}{}
-	}
+	for _, code := range recent { recentSet[code] = struct{}{} }
 
-	pool := filterByTypes(all, final)                 // filtra por presença de tipos solicitados
-	pool = avoidRecent(pool, recentSet)               // evita recentemente exibidos (por code)
-	sel := ads.FilterByRules(ads.Shuffle(pool), final) // aplica cotas por tipo
+	pool := filterByTypes(all, final)                   // filtra por presença de tipos solicitados
+	pool = avoidRecent(pool, recentSet)                 // evita recentemente exibidos (por code)
+	sel  := ads.FilterByRules(ads.Shuffle(pool), final) // aplica cotas por tipo
 
 	log.Printf("[ads handler] tenant=%d type=%s pool=%d recent=%d selected=%d", t.ID, ptype, len(pool), len(recent), len(sel))
 
-	// Salvar LOG de view (TYPE = 1) para cada anúncio entregue
-	// Salvar LOG de view (TYPE = 1) para cada anúncio entregue
+	// Salvar LOG de view (TYPE = 1) para cada anúncio entregue — com ip (preferido) e ip_raw
 	if d.DB != nil && len(sel) > 0 {
-		ip := userIP(r)
+		ip, ipRaw := preferIP(r)
 		ua := r.UserAgent()
 		ref := r.Referer()
 		for _, a := range sel {
@@ -98,7 +95,7 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 				log.Printf("[ads view] skip sem UUID code=%s tenant=%d", a.Code, t.ID)
 				continue
 			}
-			if err := salvarView(d.DB, a.UUID, t.ID, 1, ip, ua, ref); err != nil {
+			if err := salvarView(d.DB, a.UUID, t.ID, 1, ip, ipRaw, ua, ref); err != nil {
 				log.Printf("[ads view] erro salvar uuid=%s tenant=%d: %v", a.UUID, t.ID, err)
 			}
 		}
@@ -107,91 +104,66 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	if len(sel) > 0 {
 		// guarda os "codes" exibidos para o usuário
 		ids := make([]string, 0, len(sel))
-		for _, a := range sel {
-			ids = append(ids, a.Code)
-		}
+		for _, a := range sel { ids = append(ids, a.Code) }
 		_ = d.Recent.Push(r, t.ID, uk, ids, d.Cfg.RecentN)
 	}
 
 	_ = json.NewEncoder(w).Encode(ads.AdsResponse{
-		Ads:      sel,
-		Redirect: t.AdsURL,
-		Static:   t.Static,
+		Ads: sel, Redirect: t.AdsURL, Static: t.Static,
 	})
 }
 
 // ---- helpers (com ResponseAd) ----
 
+// mantém anúncios que tenham pelo menos 1 tipo presente nas regras
 func filterByTypes(list []ads.ResponseAd, rules map[int]int) []ads.ResponseAd {
-	if len(rules) == 0 {
-		return list
-	}
+	if len(rules) == 0 { return list }
 	set := map[int]struct{}{}
-	for tp := range rules {
-		set[tp] = struct{}{}
-	}
+	for tp := range rules { set[tp] = struct{}{} }
+
 	out := make([]ads.ResponseAd, 0, len(list))
 	for _, a := range list {
-		if len(a.Types) == 0 {
-			continue
-		}
+		if len(a.Types) == 0 { continue }
 		keep := false
 		for tp := range a.Types {
-			if _, ok := set[tp]; ok {
-				keep = true
-				break
-			}
+			if _, ok := set[tp]; ok { keep = true; break }
 		}
-		if keep {
-			out = append(out, a)
-		}
+		if keep { out = append(out, a) }
 	}
 	return out
 }
 
 func avoidRecent(in []ads.ResponseAd, recent map[string]struct{}) []ads.ResponseAd {
-	if len(recent) == 0 {
-		return in
-	}
+	if len(recent) == 0 { return in }
 	keep := make([]ads.ResponseAd, 0, len(in))
 	for _, a := range in {
-		if _, ok := recent[a.Code]; !ok {
-			keep = append(keep, a)
-		}
+		if _, ok := recent[a.Code]; !ok { keep = append(keep, a) }
 	}
-	if len(keep) == 0 {
-		return in
-	}
+	if len(keep) == 0 { return in }
 	return keep
 }
 
-func userIP(r *http.Request) string {
-	if v := r.Header.Get("cf-connecting-ip"); v != "" {
-		return v
-	}
-	if v := r.Header.Get("x-forwarded-for"); v != "" {
-		return strings.TrimSpace(strings.Split(v, ",")[0])
-	}
-	return strings.Split(r.RemoteAddr, ":")[0]
-}
-
 func userKey(r *http.Request) string {
-	ip := strings.TrimSpace(userIP(r))
+	ip := strings.TrimSpace(preferOrRawIP(r))
 	ua := strings.TrimSpace(r.UserAgent())
 	sum := sha256.Sum256([]byte(ip + "|" + ua))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-// ---- persistência de logs ----
-
-// salvarView: insere uma linha no ads_logs com TYPE = 1 (view de JSON).
-// Aqui uso a coluna `code`; se sua tabela não tiver `code`, troque para `uuid` conforme seu schema.
-func salvarView(db *sql.DB, uuid string, tenantID int, typ int, ip, ua, ref string) error {
-	const q = `
-		INSERT INTO ads_logs (uuid, tenant_id, type, ip, user_agent, referer, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`
-	_, err := db.Exec(q, uuid, tenantID, typ, ip, ua, ref, time.Now())
-	return err
+// preferOrRawIP: helper só para userKey (usa preferIP e devolve o preferido)
+func preferOrRawIP(r *http.Request) string {
+	if p, _ := preferIP(r); p != "" { return p }
+	return strings.Split(r.RemoteAddr, ":")[0]
 }
 
+// ---- persistência de logs ----
+
+// salvarView: insere uma linha no ads_logs com TYPE = 1 (view), gravando ip e ip_raw.
+func salvarView(db *sql.DB, uuid string, tenantID int, typ int, ip, ipRaw, ua, ref string) error {
+	const q = `
+		INSERT INTO ads_logs (uuid, tenant_id, type, ip, ip_raw, user_agent, referer, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := db.Exec(q, uuid, tenantID, typ, ip, ipRaw, ua, ref, time.Now())
+	return err
+}
