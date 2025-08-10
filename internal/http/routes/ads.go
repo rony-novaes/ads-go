@@ -31,6 +31,13 @@ var adTypeConfig = map[string]map[int]int{
 }
 
 func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
+	
+	log.Printf("CF-Pseudo-IPv4=%q CF-Connecting-IP=%q XFF=%q RemoteAddr=%q",
+		r.Header.Get("CF-Pseudo-IPv4"),
+		r.Header.Get("CF-Connecting-IP"),
+		r.Header.Get("X-Forwarded-For"),
+		r.RemoteAddr,
+	)
 	w.Header().Set("Content-Type", "application/json")
 
 	ptype := r.URL.Query().Get("type")

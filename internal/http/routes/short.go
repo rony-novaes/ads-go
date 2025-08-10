@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -125,21 +124,6 @@ func fetchShortFromMySQL(ctx context.Context, db *sql.DB, tenantID int, short st
 		return "", "", 0, false, err
 	}
 	return url, uuid, id, true, nil
-}
-
-func clientIP(r *http.Request) string {
-	if ip := strings.TrimSpace(r.Header.Get("cf-connecting-ip")); ip != "" {
-		return ip
-	}
-	if fwd := r.Header.Get("x-forwarded-for"); fwd != "" {
-		ip := strings.TrimSpace(strings.Split(fwd, ",")[0])
-		return ip
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil && host != "" {
-		return host
-	}
-	return r.RemoteAddr
 }
 
 func salvarClick(db *sql.DB, uuid string, tenantID int, typ int, ip, ipRaw, ua, ref string) error {
