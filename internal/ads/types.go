@@ -6,10 +6,11 @@ type AdTypeVariant struct {
 }
 
 type ResponseAd struct {
-	Breackpoint int                       `json:"breackpoint"`
-	Code        string                    `json:"code"`
-	Description string                    `json:"description"`
-	Types       map[int]AdTypeVariant     `json:"types"`
+	Breackpoint int                         `json:"breackpoint"`
+	Code        string                      `json:"code"`
+	Description string                      `json:"description"`
+	Types       map[int]AdTypeVariant       `json:"types"`
+	UUID        string                      `json:"-"` // usado só no servidor p/ logs
 }
 
 type AdsResponse struct {

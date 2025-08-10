@@ -88,12 +88,19 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[ads handler] tenant=%d type=%s pool=%d recent=%d selected=%d", t.ID, ptype, len(pool), len(recent), len(sel))
 
 	// Salvar LOG de view (TYPE = 1) para cada anúncio entregue
+	// Salvar LOG de view (TYPE = 1) para cada anúncio entregue
 	if d.DB != nil && len(sel) > 0 {
 		ip := userIP(r)
 		ua := r.UserAgent()
 		ref := r.Referer()
 		for _, a := range sel {
-			_ = salvarView(d.DB, a.Code, t.ID, 1, ip, ua, ref)
+			if a.UUID == "" {
+				log.Printf("[ads view] skip sem UUID code=%s tenant=%d", a.Code, t.ID)
+				continue
+			}
+			if err := salvarView(d.DB, a.UUID, t.ID, 1, ip, ua, ref); err != nil {
+				log.Printf("[ads view] erro salvar uuid=%s tenant=%d: %v", a.UUID, t.ID, err)
+			}
 		}
 	}
 
@@ -179,11 +186,12 @@ func userKey(r *http.Request) string {
 
 // salvarView: insere uma linha no ads_logs com TYPE = 1 (view de JSON).
 // Aqui uso a coluna `code`; se sua tabela não tiver `code`, troque para `uuid` conforme seu schema.
-func salvarView(db *sql.DB, code string, tenantID int, typ int, ip, ua, ref string) error {
+func salvarView(db *sql.DB, uuid string, tenantID int, typ int, ip, ua, ref string) error {
 	const q = `
-		INSERT INTO ads_logs (code, tenant_id, type, ip, user_agent, referer, created_at)
+		INSERT INTO ads_logs (uuid, tenant_id, type, ip, user_agent, referer, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := db.Exec(q, code, tenantID, typ, ip, ua, ref, time.Now())
+	_, err := db.Exec(q, uuid, tenantID, typ, ip, ua, ref, time.Now())
 	return err
 }
+

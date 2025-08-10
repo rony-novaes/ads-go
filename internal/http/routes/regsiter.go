@@ -37,7 +37,14 @@ func Register(mux *chi.Mux, cfg config.Config, rdb *redis.Client, db *sql.DB) {
 		recent = NewMemoryRecent()
 	}
 
-	ad := adsDeps{Cfg: cfg, Recent: recent, Repo: repo, Cache: cache}
+	ad := adsDeps{
+		Cfg: cfg,
+		Recent: recent, // o que você já usa
+		Repo: repo,
+		Cache: cache,
+		DB: db,             // <<<<<<<<<<
+	}
+
 	s := shortDeps{Cfg: cfg, Rdb: rdb, DB: db} // <- adicionamos DB aqui
 
 	// Raiz: redireciona para o portal do tenant
