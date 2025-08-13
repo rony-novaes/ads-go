@@ -62,7 +62,10 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// pool base (cache)
 	all := d.Cache.Get(t.ID)
-
+	log.Printf("TENANT = %d HOST=%q",
+		t.ID,
+		r.Host
+	)
 	// fallback: se cache vier vazio, busca direto no MySQL e popula cache
 	if len(all) == 0 {
 		types := make([]int, 0, len(final))
