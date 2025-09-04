@@ -14,8 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/redis/go-redis/v9"
 
-	"ads-go/internal/config"
-	"ads-go/internal/tenant"
+	"search-go/internal/config"
+	"search-go/internal/tenant"
 )
 
 type shortDeps struct {

@@ -12,16 +12,65 @@ type Tenant struct {
 	Static string
 }
 
-var tenants = map[string]Tenant{
-	"ads.conexao.gru.br":   {ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://ads.conexao.gru.br",   Static: "https://static.conexao.gru.br"},
-	"conexao.gru.br":       {ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://ads.conexao.gru.br",   Static: "https://static.conexao.gru.br"},
-	"ads.gazeta.osasco.br": {ID: 2, Portal: "gazetadeosasco.com.br",   AdsURL: "https://ads.gazeta.osasco.br", Static: "https://static.gazeta.osasco.br"},
-	"gazeta.osasco.br":     {ID: 2, Portal: "gazetadeosasco.com.br",   AdsURL: "https://ads.gazeta.osasco.br", Static: "https://static.gazeta.osasco.br"},
-	"ads.diario.osasco.br": {ID: 3, Portal: "diariodeosasco.com.br",   AdsURL: "https://ads.diario.osasco.br", Static: "https://static.diario.osasco.br"},
-	"diario.osasco.br":     {ID: 3, Portal: "diariodeosasco.com.br",   AdsURL: "https://ads.diario.osasco.br", Static: "https://static.diario.osasco.br"},
+package tenant
+
+import (
+	"encoding/json"
+	"log"
+	"os"
+	"strings"
+)
+
+type Tenant struct {
+	ID     int
+	Portal string
+	AdsURL string
+	Static string
 }
 
-var Default = Tenant{ID: 1, Portal: "conexaoguarulhos.com.br", AdsURL: "https://ads.conexao.gru.br", Static: "https://static.conexao.gru.br"}
+// (mantém seu Default como já está declarado no arquivo)
+var Default = Tenant{ID: 1, Portal: "https://conexaoguarulhos.com.br", Search: "https://pesquisa.conexaoguarulhos.com.br", Static: "https://static.conexao.gru.br"}
+
+// --------- ALTERAÇÃO AQUI ---------
+var tenants map[string]Tenant
+
+func init() {
+	tenants = loadTenantsFromJSON()
+}
+
+func loadTenantsFromJSON() map[string]Tenant {
+	// fallback: seu mapa atual embutido
+	fallback := map[string]Tenant{
+		"pesquisa.conexaoguarulhos.com.br":	{ID: 1, Portal: "https://conexaoguarulhos.com.br", Search: "https://pesquisa.conexaoguarulhos.com.br",	Static: "https://static.conexaoguarulhos.com.br"},
+		"pesquisa.gazetadeosasco.com.br":	{ID: 2, Portal: "https://gazetadeosasco.com.br",   Search: "https://pesquisa.gazetadeosasco.com.br",	Static: "https://static.gazetadeosasco.com.br"},
+		"pesquisa.diariodeosasco.com.br":	{ID: 3, Portal: "https://diariodeosasco.com.br",   Search: "https://pesquisa.diariodeosasco.com.br",	Static: "https://static.diariodeosasco.com.br"},
+	}
+
+	path := strings.TrimSpace(os.Getenv("TENANT_FILE"))
+	if path == "" {
+		path = "tenant.json"
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("[tenant] %s não encontrado (%v); usando mapa embutido", path, err)
+		return fallback
+	}
+
+	var m map[string]Tenant
+	if err := json.Unmarshal(data, &m); err != nil {
+		log.Printf("[tenant] erro ao parsear %s (%v); usando mapa embutido", path, err)
+		return fallback
+	}
+
+	if len(m) == 0 {
+		log.Printf("[tenant] %s carregado, mas sem entradas; usando mapa embutido", path)
+		return fallback
+	}
+
+	log.Printf("[tenant] carregados %d tenants de %s", len(m), path)
+	return m
+}
 
 func normalizeHost(h string) string {
 	h = strings.ToLower(strings.TrimSpace(h))
@@ -38,7 +87,6 @@ func normalizeHost(h string) string {
 }
 
 func FromRequestHost(host, forwarded string) Tenant {
-	log.Printf("[tenant] CHEGAMOS AQUI %q", host)
 	raw := strings.TrimSpace(forwarded)
 	if raw == "" {
 		raw = host

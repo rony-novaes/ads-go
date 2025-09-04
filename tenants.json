@@ -1,0 +1,17 @@
+{
+  "pesquisa.conexaoguarulhos.com.br": {
+    "ID": 1,
+    "Portal": "https://conexaoguarulhos.com.br",
+    "Search": "https://pesquisa.conexaoguarulhos.com.br"
+  },
+  "pesquisa.gazetadeosasco.com.br": {
+    "ID": 2,
+    "Portal": "https://gazetadeosasco.com.br",
+    "Search": "https://pesquisa.gazetadeosasco.com.br"
+  },
+  "pesquisa.diariodeosasco.com.br": {
+    "ID": 3,
+    "Portal": "https://diariodeosasco.com.br",
+    "Search": "https://pesquisa.diariodeosasco.com.br"
+  }
+}

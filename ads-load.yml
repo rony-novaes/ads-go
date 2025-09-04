@@ -1,0 +1,16 @@
+config:
+  target: "https://ads.conexao.gru.br"
+  phases:
+    - duration: 120
+      arrivalRate: 50     # 50 req/s inicial
+    - duration: 120
+      arrivalRate: 200    # 200 req/s
+scenarios:
+  - name: Redirect Test
+    flow:
+      - get:
+          url: "/jc8qYZXT?1754856558418"
+  - name: JSON Test
+    flow:
+      - get:
+          url: "/?type=news&ad_type_4=1&1754856696414"

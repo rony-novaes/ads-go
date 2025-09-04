@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"ads-go/internal/ads"
-	"ads-go/internal/config"
-	"ads-go/internal/tenant"
+	"search-go/internal/ads"
+	"search-go/internal/config"
+	"search-go/internal/tenant"
 )
 
 type adsDeps struct {
@@ -65,6 +65,12 @@ func (d adsDeps) AdsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("TENANT=%d HOST=%q",
 		t.ID,
 		r.Host,
+	)
+	log.Printf("[ads handler] host=%q xfh=%q xorig=%q url=%s",
+		r.Host,
+		r.Header.Get("X-Forwarded-Host"),
+		r.Header.Get("X-Original-Host"),
+		r.URL.String(),
 	)
 	// fallback: se cache vier vazio, busca direto no MySQL e popula cache
 	if len(all) == 0 {

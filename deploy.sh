@@ -1,11 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="/projects/ads-go"
+APP_DIR="/projects/search-go"
 RELEASES_DIR="$APP_DIR/releases"
 BIN_LINK="$APP_DIR/bin"
 WORKTREES_DIR="$APP_DIR/.worktrees"
-HEALTH_PATH="/ads?type=home"      # ajuste se quiser outro healthcheck
+HEALTH_PATH="?type=home"      # ajuste se quiser outro healthcheck
 TEST_URL_8089="http://127.0.0.1:8089${HEALTH_PATH}"
 TEST_URL_8088="http://127.0.0.1:8088${HEALTH_PATH}"
 
@@ -61,7 +61,7 @@ NEW_RELEASE="$RELEASES_DIR/$LATEST_TAG"
 mkdir -p "$NEW_RELEASE"
 echo "[3/7] Build da tag $LATEST_TAG..."
 pushd "$WT_PATH" >/dev/null
-GOFLAGS="-trimpath" CGO_ENABLED=0 go build -ldflags="-s -w" -o "$NEW_RELEASE/ads-go" ./cmd/server
+GOFLAGS="-trimpath" CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BIN_LINK" ./cmd/server
 popd >/dev/null
 
 # grava a versão da release
@@ -73,7 +73,7 @@ ln -sfn "$NEW_RELEASE" "$BIN_LINK"
 
 # 6) restart sem downtime: 8089 -> testa -> 8088
 echo "[5/7] Reiniciando 8089..."
-sudo systemctl restart ads-go@8089
+sudo systemctl restart search-go@8089
 sleep 2
 if curl -fsS "$TEST_URL_8089" >/dev/null; then
   echo "8089 OK ✅"
@@ -83,7 +83,7 @@ else
 fi
 
 echo "[6/7] Reiniciando 8088..."
-sudo systemctl restart ads-go@8088
+sudo systemctl restart search-go@8088
 sleep 2
 if curl -fsS "$TEST_URL_8088" >/dev/null; then
   echo "8088 OK ✅"

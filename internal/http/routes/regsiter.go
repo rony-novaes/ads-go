@@ -9,9 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/redis/go-redis/v9"
 
-	"ads-go/internal/ads"
-	"ads-go/internal/config"
-	"ads-go/internal/tenant"
+	"search-go/internal/ads"
+	"search-go/internal/config"
+	"search-go/internal/tenant"
 )
 
 type RecentStore interface {

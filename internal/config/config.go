@@ -3,37 +3,37 @@ package config
 import (
 	"os"
 	"strconv"
-	"strings"
+	"time"
 )
 
 type Config struct {
-	Port           string
-	APIKey         string
-	AllowedOrigins []string
-	HMACSecret     string
-	RedisURL       string
-	RecentN        int
+	BindAddr       string
+	OSHost         string
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	CORSAllowAny   bool
 }
 
-func get(key, def string) string { v := strings.TrimSpace(os.Getenv(key)); if v == "" { return def }; return v }
-
-func parseOrigins() []string {
-	v := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
-	if v == "" { return []string{"https://conexaoguarulhos.com.br", "https://www.conexaoguarulhos.com.br", "https://gazetadeosasco.com.br", "https://www.gazetadeosasco.com.br"} }
-	parts := strings.Split(v, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts { p = strings.TrimSpace(p); if p != "" { out = append(out, p) } }
-	return out
+func getenv(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+func atoiDef(v string, def int) int {
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return i
 }
 
 func Load() Config {
-	recentN, _ := strconv.Atoi(get("RECENT_N", "5"))
 	return Config{
-		Port:           get("PORT", "8080"),
-		APIKey:         get("API_KEY", "changeme"),
-		AllowedOrigins: parseOrigins(),
-		HMACSecret:     get("HMAC_SECRET", "super-secret"),
-		RedisURL:       os.Getenv("REDIS_URL"),
-		RecentN:        recentN,
+		BindAddr:     getenv("BIND_ADDR", ":8080"),
+		OSHost:       getenv("OS_HOST", "http://opensearch:9200"),
+		ReadTimeout:  time.Duration(atoiDef(getenv("READ_TIMEOUT_MS", "3000"), 3000)) * time.Millisecond,
+		WriteTimeout: time.Duration(atoiDef(getenv("WRITE_TIMEOUT_MS", "3000"), 3000)) * time.Millisecond,
+		CORSAllowAny: getenv("CORS_ALLOW_ANY", "0") == "1",
 	}
 }
