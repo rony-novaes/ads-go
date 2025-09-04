@@ -1,0 +1,32 @@
+# /etc/systemd/system/search-go@.service
+[Unit]
+Description=Search Go API (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/projects/search-go
+
+# lê direto do caminho desejado:
+EnvironmentFile=/projects/envs/search-go/.env
+
+# Se quiser sobrepor BIND por instância (8081, 8082, 8083):
+Environment=BIND=127.0.0.1:%i
+
+ExecStart=/projects/search-go/bin/search-go
+Restart=always
+RestartSec=2
+
+# Hardening básico
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

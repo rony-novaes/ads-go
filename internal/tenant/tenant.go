@@ -8,7 +8,7 @@ import (
 type Tenant struct {
 	ID     int
 	Portal string
-	AdsURL string
+	Search string
 	Static string
 }
 
@@ -24,7 +24,7 @@ import (
 type Tenant struct {
 	ID     int
 	Portal string
-	AdsURL string
+	Search string
 	Static string
 }
 
