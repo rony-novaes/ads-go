@@ -21,6 +21,29 @@ import (
 	redisc "ads-go/internal/storage/redis"
 )
 
+func warmUp(db *sql.DB, rdb *redis.Client, r http.Handler) {
+    log.Println("Warming up...")
+
+    // Força pool MySQL
+    db.SetMaxOpenConns(10)
+    db.SetMaxIdleConns(10)
+    _, _ = db.Exec("SELECT 1")
+
+    // Força pool Redis
+    if rdb != nil {
+        for i := 0; i < 10; i++ {
+            _ = rdb.Ping(context.Background()).Err()
+        }
+    }
+
+    // Força Chi compilar rotas e middlewares
+    req, _ := http.NewRequest("GET", "/", nil)
+    rr := httptest.NewRecorder()
+    r.ServeHTTP(rr, req)
+
+    log.Println("Warm-up concluído")
+}
+
 func main() {
 	// Carrega .env (best-effort)
 	_ = godotenv.Load(".env")
@@ -65,6 +88,8 @@ func main() {
 		Addr:    ":" + cfg.Port,
 		Handler: r,
 	}
+
+	warmUp(db, rdb, r)
 
 	go func() {
 		log.Printf("listening on :%s", cfg.Port)
